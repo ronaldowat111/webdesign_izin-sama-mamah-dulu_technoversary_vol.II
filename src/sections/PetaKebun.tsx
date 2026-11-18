@@ -77,6 +77,20 @@ export function PetaKebun() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId, view])
 
+  // Other sections (e.g. Jenis Flora cards) can open a place: window event 'peta:select' with the place id
+  useEffect(() => {
+    const onSelect = (e: Event) => {
+      const id = (e as CustomEvent<string>).detail
+      if (!PLACES.some((p) => p.id === id)) return
+      setRouteId(null)
+      setFilter('semua')
+      setView('peta')
+      setSelectedId(id)
+    }
+    window.addEventListener('peta:select', onSelect)
+    return () => window.removeEventListener('peta:select', onSelect)
+  }, [])
+
   const select = (id: string) => {
     if (pz.wasDrag()) return
     setSelectedId((cur) => (cur === id ? null : id))

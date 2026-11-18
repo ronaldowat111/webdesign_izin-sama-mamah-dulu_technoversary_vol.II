@@ -1,5 +1,6 @@
 import { Navbar } from './components/Navbar'
 import { Hero } from './sections/Hero'
+import { JenisFlora } from './sections/JenisFlora'
 import { PetaKebun } from './sections/PetaKebun'
 import { Tentang } from './sections/Tentang'
 
@@ -11,6 +12,7 @@ function App() {
         <Hero />
         <Tentang />
         <PetaKebun />
+        <JenisFlora />
 
         {/* Placeholder — next section is built from the next reference */}
         <section id="jelajah" className="grid min-h-[60vh] place-items-center bg-cream-50 px-4">
