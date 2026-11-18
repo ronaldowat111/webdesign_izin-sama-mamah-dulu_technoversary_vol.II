@@ -200,7 +200,7 @@ export function Hero() {
                 </a>
               </div>
               <a
-                href="#jelajah"
+                href="#peta"
                 aria-label="Gulir ke bagian berikutnya"
                 className="hidden h-[88px] w-14 shrink-0 animate-rise place-items-center rounded-full border border-cream-50/15 bg-forest-950/40 text-cream-50 backdrop-blur-xl transition-colors hover:bg-forest-950/60 sm:grid"
                 style={{ animationDelay: '1.3s' }}

@@ -1,5 +1,6 @@
 import { Navbar } from './components/Navbar'
 import { Hero } from './sections/Hero'
+import { PetaKebun } from './sections/PetaKebun'
 
 function App() {
   return (
@@ -7,6 +8,7 @@ function App() {
       <Navbar />
       <main>
         <Hero />
+        <PetaKebun />
 
         {/* Placeholder — next section is built from the next reference */}
         <section id="jelajah" className="grid min-h-[60vh] place-items-center bg-cream-50 px-4">
