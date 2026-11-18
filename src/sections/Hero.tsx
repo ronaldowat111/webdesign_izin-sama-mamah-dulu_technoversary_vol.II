@@ -2,153 +2,220 @@ import { ArrowDown, ArrowUpRight } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { usePrefersReducedMotion } from '../hooks/useMediaQuery'
 
-const POSTER = '/images/hero-poster.jpg'
+// Photo: Colin Meg / Unsplash. Cutout made locally with rembg (u2net); both share the same canvas.
+const srcSet = (name: string) => [1200, 2000, 2800].map((w) => `/images/${name}-${w}.webp ${w}w`).join(', ')
+const BG = { src: '/images/rafflesia-2000.webp', srcSet: srcSet('rafflesia') }
+const FG = { src: '/images/rafflesia-cutout-2000.webp', srcSet: srcSet('rafflesia-cutout') }
+const IMG_RATIO = 3 / 2
+/** Top of the tallest petal as a fraction of image height (measured from the cutout's alpha). */
+const PETAL_TOP = 0.0702
+/** How much of the headline's last line the petals should cover. */
+const LINE_COVER = 0.38
+
+/** Layout offset (ignores transforms) of `el` inside `ancestor`. */
+function offsetTopWithin(el: HTMLElement, ancestor: HTMLElement) {
+  let top = 0
+  let node: HTMLElement | null = el
+  while (node && node !== ancestor) {
+    top += node.offsetTop
+    node = node.offsetParent as HTMLElement | null
+  }
+  return top
+}
 
 /**
- * "Window" hero: one video, two views.
- * - Sharp layer: the <video>, clipped to a rounded frame with clip-path.
- * - Blurred surround: a tiny <canvas> that copies every video frame, upscaled + blurred.
- * Both cover the same box, so the scene stays continuous across the frame edge.
+ * Depth hero: photo → headline → flower cutout, inside the glass frame.
+ * Scroll opens the frame to full-bleed, zooms the scene and lifts the headline away.
  */
 export function Hero() {
   const reducedMotion = usePrefersReducedMotion()
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
   const sectionRef = useRef<HTMLElement>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
+  const sceneRef = useRef<HTMLDivElement>(null)
+  const lastLineRef = useRef<HTMLSpanElement>(null)
 
-  // Mirror video frames into the blurred canvas
+  // Place the photo so the tallest petal tucks over the lower part of the headline's last line
   useEffect(() => {
-    const video = videoRef.current
-    const canvas = canvasRef.current
-    const ctx = canvas?.getContext('2d')
-    if (!video || !canvas || !ctx) return
+    const stage = stageRef.current
+    const scene = sceneRef.current
+    const line = lastLineRef.current
+    if (!stage || !scene || !line) return
 
-    const draw = () => {
-      if (video.readyState >= 2) ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    const layout = () => {
+      const W = scene.clientWidth
+      const S = scene.clientHeight
+      const lh = parseFloat(getComputedStyle(line).lineHeight) || line.offsetHeight
+      const target = offsetTopWithin(line, scene) + line.offsetHeight - lh * LINE_COVER
+      // The media box is W × S and the image covers it top-aligned, so its rendered height is:
+      const imgH = Math.max(W / IMG_RATIO, S)
+      stage.style.setProperty('--media-top', `${Math.round(target - PETAL_TOP * imgH)}px`)
     }
-    // requestVideoFrameCallback fires once per decoded frame; rAF is the fallback (older Firefox)
-    const hasVFC = typeof video.requestVideoFrameCallback === 'function'
-    let handle = 0
-    const loop = () => {
-      if (hasVFC) {
-        draw()
-        handle = video.requestVideoFrameCallback(loop)
-      } else {
-        if (!video.paused) draw()
-        handle = requestAnimationFrame(loop)
-      }
-    }
-    handle = hasVFC ? video.requestVideoFrameCallback(loop) : requestAnimationFrame(loop)
-    video.addEventListener('loadeddata', draw)
-    return () => {
-      if (hasVFC) video.cancelVideoFrameCallback(handle)
-      else cancelAnimationFrame(handle)
-      video.removeEventListener('loadeddata', draw)
-    }
+
+    layout()
+    document.fonts?.ready.then(layout)
+    const ro = new ResizeObserver(layout)
+    ro.observe(scene)
+    ro.observe(line)
+    return () => ro.disconnect()
   }, [])
 
-  // Autoplay (unless reduced motion) and pause while the hero is off-screen
+  // Scroll progress → --p
   useEffect(() => {
-    const video = videoRef.current
     const section = sectionRef.current
-    if (!video || !section) return
+    const stage = stageRef.current
+    if (!section || !stage) return
     if (reducedMotion) {
-      video.pause()
+      stage.style.setProperty('--p', '0')
       return
     }
-    const io = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) video.play().catch(() => {})
-      else video.pause()
-    })
-    io.observe(section)
-    return () => io.disconnect()
+    let raf = 0
+    const update = () => {
+      raf = 0
+      const rect = section.getBoundingClientRect()
+      const total = rect.height - window.innerHeight
+      const p = total > 0 ? Math.min(1, Math.max(0, -rect.top / total)) : 0
+      stage.style.setProperty('--p', p.toFixed(4))
+      stage.toggleAttribute('data-past', p > 0.32)
+    }
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(update)
+    }
+    update()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', onScroll)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', onScroll)
+    }
   }, [reducedMotion])
 
-  const frameInset = 'var(--hero-fy) var(--hero-fx)'
+  // Pointer parallax → --mx / --my (eased), fine pointers only
+  useEffect(() => {
+    const stage = stageRef.current
+    if (!stage || reducedMotion || !window.matchMedia('(pointer: fine)').matches) return
+    let tx = 0
+    let ty = 0
+    let x = 0
+    let y = 0
+    let raf = 0
+    const tick = () => {
+      x += (tx - x) * 0.08
+      y += (ty - y) * 0.08
+      stage.style.setProperty('--mx', x.toFixed(4))
+      stage.style.setProperty('--my', y.toFixed(4))
+      raf = Math.abs(tx - x) > 0.001 || Math.abs(ty - y) > 0.001 ? requestAnimationFrame(tick) : 0
+    }
+    const onMove = (e: PointerEvent) => {
+      tx = (e.clientX / window.innerWidth) * 2 - 1
+      ty = (e.clientY / window.innerHeight) * 2 - 1
+      if (!raf) raf = requestAnimationFrame(tick)
+    }
+    window.addEventListener('pointermove', onMove, { passive: true })
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('pointermove', onMove)
+    }
+  }, [reducedMotion])
+
+  const inner = { left: 'calc(var(--hero-fx) + var(--hero-px))', right: 'calc(var(--hero-fx) + var(--hero-px))' }
 
   return (
-    <section ref={sectionRef} aria-label="Selamat datang" className="relative isolate h-svh min-h-[600px] overflow-hidden bg-forest-950">
-      {/* Blurred surround */}
-      <div aria-hidden className="absolute inset-0 -z-10 scale-110 blur-2xl brightness-[0.6] saturate-[1.15]">
-        <img src={POSTER} alt="" className="absolute inset-0 size-full object-cover" />
-        <canvas ref={canvasRef} width={160} height={90} className="absolute inset-0 size-full object-cover" />
-      </div>
-      <div aria-hidden className="absolute inset-0 -z-10 bg-forest-950/35" />
+    <section ref={sectionRef} aria-label="Selamat datang" className="relative h-[200svh] motion-reduce:h-svh">
+      <div ref={stageRef} className="hero-stage sticky top-0 isolate h-svh min-h-[600px] overflow-hidden bg-forest-950">
+        {/* Blurred surround (outside the frame) */}
+        <div aria-hidden className="hero-media hero-media--fade blur-2xl brightness-[0.55] saturate-[1.1]">
+          <img src={BG.src} srcSet={BG.srcSet} sizes="100vw" alt="" />
+        </div>
+        <div aria-hidden className="absolute inset-0 bg-forest-950/35" />
 
-      {/* Sharp, framed video */}
-      <video
-        ref={videoRef}
-        className="absolute inset-0 size-full animate-frame-in object-cover"
-        style={{ clipPath: `inset(${frameInset} round var(--radius-panel))` }}
-        poster={POSTER}
-        muted
-        loop
-        playsInline
-        preload={reducedMotion ? 'metadata' : 'auto'}
-        aria-hidden
-      >
-        <source src="/video/hero-mobile.mp4" type="video/mp4" media="(max-width: 767px)" />
-        <source src="/video/hero-desktop.mp4" type="video/mp4" />
-      </video>
+        {/* Framed scene */}
+        <div ref={sceneRef} className="hero-scene absolute inset-0 animate-[frame-in_1.3s_var(--ease-organic)_backwards] bg-forest-950">
+          <div aria-hidden className="hero-media hero-media--fade">
+            <img src={BG.src} srcSet={BG.srcSet} sizes="100vw" alt="" fetchPriority="high" />
+          </div>
+          <div
+            aria-hidden
+            className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_35%,transparent_35%,rgb(15_36_25/0.55))]"
+          />
+          {/* Warm glow behind the headline so the dark top band doesn't read flat */}
+          <div
+            aria-hidden
+            className="absolute inset-x-0 top-0 h-[60%] bg-[radial-gradient(ellipse_55%_60%_at_50%_30%,rgb(212_175_98/0.10),transparent_70%)]"
+          />
 
-      {/* Frame: edge light, depth shadow, legibility gradient, content */}
-      <div
-        className="absolute flex animate-[fade_1s_var(--ease-organic)_0.6s_both] flex-col justify-end overflow-hidden rounded-panel shadow-[0_40px_90px_-30px_rgb(0_0_0/0.7)] ring-1 ring-cream-50/15 ring-inset"
-        style={{ inset: frameInset }}
-      >
-        <div aria-hidden className="absolute inset-0 bg-linear-to-t from-forest-950/85 via-forest-950/25 via-45% to-transparent" />
-        <div aria-hidden className="absolute inset-x-0 top-0 h-40 bg-linear-to-b from-forest-950/40 to-transparent" />
-
-        <div
-          className="relative mx-auto grid w-full max-w-[1400px] gap-8 pt-28 pb-6 sm:pb-10 lg:grid-cols-12 lg:items-end lg:gap-10 lg:pb-[clamp(2rem,6vh,4.5rem)]"
-          style={{ paddingInline: 'var(--hero-px)' }}
-        >
-          <div className="lg:col-span-7">
-            <p
-              className="flex animate-rise items-center gap-3 text-[11px] font-semibold tracking-[0.28em] text-gold-300 uppercase sm:text-xs"
-              style={{ animationDelay: '0.75s' }}
-            >
-              <span aria-hidden className="h-px w-10 bg-gold-400" />
-              Kebun Raya Bogor · Sejak 1817
+          {/* Headline — sits behind the petals */}
+          <div className="hero-headline absolute z-10 text-center top-[calc(var(--hero-fy)+92px)] sm:top-[calc(var(--hero-fy)+108px)]" style={inner}>
+            <p className="hero-line text-[11px] font-semibold tracking-[0.3em] text-gold-300 uppercase sm:text-xs">
+              <span style={{ animationDelay: '0.55s' }}>Kebun Raya Bogor · Sejak 1817</span>
             </p>
-            <h1 className="mt-5 text-[clamp(2.75rem,8vw,6.5rem)] lg:text-[clamp(2.75rem,6.6vw,6.5rem)] leading-[0.95] font-light tracking-[-0.02em] text-cream-50">
-              <span className="block animate-rise" style={{ animationDelay: '0.85s' }}>
-                Di Sini, Waktu
+            <h1 className="mt-4 text-[clamp(2.75rem,min(8.4vw,15svh),8.5rem)] leading-[0.95] font-light tracking-[-0.02em] text-cream-50 [text-shadow:0_2px_30px_rgb(0_0_0/0.3)] sm:mt-5">
+              <span className="hero-line">
+                <span style={{ animationDelay: '0.65s' }}>Di Sini, Waktu</span>
               </span>
-              <span className="block animate-rise" style={{ animationDelay: '0.97s' }}>
-                <em className="font-normal text-gold-300">Tumbuh</em> Perlahan.
+              <span ref={lastLineRef} className="hero-line">
+                <span style={{ animationDelay: '0.78s' }}>
+                  <em className="font-normal text-gold-300">Tumbuh</em> Perlahan.
+                </span>
               </span>
             </h1>
           </div>
 
-          <div className="animate-rise lg:col-span-5 lg:pb-2" style={{ animationDelay: '1.1s' }}>
-            <p className="max-w-md text-base leading-relaxed text-cream-50/90 sm:text-lg lg:text-xl lg:leading-relaxed">
-              Lebih dari dua abad, 87 hektare hutan tropis di jantung Kota Hujan menjaga ribuan kehidupan yang tak tergantikan. Datang untuk
-              menjelajah, pulang membawa cerita.
-            </p>
+          {/* Flower cutout — in front of the headline */}
+          <div aria-hidden className="hero-media pointer-events-none z-20">
+            <img src={FG.src} srcSet={FG.srcSet} sizes="100vw" alt="" fetchPriority="high" />
+          </div>
 
-            <div className="mt-7 flex items-end justify-between gap-4">
-              <a
-                href="#peta"
-                className="glass group inline-flex h-12 items-center gap-2 rounded-full pr-4 pl-6 text-[15px] font-semibold text-cream-50 transition-colors duration-200 hover:bg-cream-50/20"
+          {/* Bottom cards */}
+          <div
+            className="hero-ui absolute z-30 flex items-end justify-between gap-4 bottom-[calc(var(--hero-fy)+16px)] sm:bottom-[calc(var(--hero-fy)+clamp(20px,4vh,40px))]"
+            style={inner}
+          >
+            <div
+              className="hidden animate-rise rounded-card border border-cream-50/10 bg-forest-950/55 px-5 py-4 backdrop-blur-xl md:block"
+              style={{ animationDelay: '1.1s' }}
+            >
+              <p className="text-[10px] font-semibold tracking-[0.25em] text-gold-300 uppercase">Koleksi Langka</p>
+              <p className="mt-1.5 font-display text-2xl text-cream-50 italic">Rafflesia arnoldii</p>
+              <p className="mt-0.5 text-sm text-cream-50/75">Puspa langka Indonesia</p>
+            </div>
+
+            <div className="flex w-full items-end justify-end gap-3 md:w-auto">
+              <div
+                className="w-full animate-rise rounded-card border border-cream-50/10 bg-forest-950/55 p-5 backdrop-blur-xl sm:max-w-sm sm:p-6"
+                style={{ animationDelay: '1.2s' }}
               >
-                Jelajahi Peta Kebun
-                <ArrowUpRight
-                  className="size-4 transition-transform duration-300 ease-(--ease-organic) group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
-                  aria-hidden
-                />
-              </a>
-
+                <p className="text-[15px] leading-relaxed text-cream-50/90">
+                  Lebih dari dua abad, 87 hektare hutan tropis di jantung Kota Hujan menjaga ribuan kehidupan yang tak tergantikan.
+                </p>
+                <a
+                  href="#peta"
+                  className="group mt-4 inline-flex h-11 items-center gap-2 rounded-full bg-cream-50 pr-4 pl-5 text-sm font-semibold text-forest-900 transition-colors duration-200 hover:bg-gold-300"
+                >
+                  Jelajahi Peta Kebun
+                  <ArrowUpRight
+                    className="size-4 transition-transform duration-300 ease-(--ease-organic) group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                    aria-hidden
+                  />
+                </a>
+              </div>
               <a
                 href="#jelajah"
                 aria-label="Gulir ke bagian berikutnya"
-                className="glass hidden h-[88px] w-14 place-items-center rounded-full text-cream-50 transition-colors hover:bg-cream-50/20 sm:grid"
+                className="hidden h-[88px] w-14 shrink-0 animate-rise place-items-center rounded-full border border-cream-50/15 bg-forest-950/40 text-cream-50 backdrop-blur-xl transition-colors hover:bg-forest-950/60 sm:grid"
+                style={{ animationDelay: '1.3s' }}
               >
                 <ArrowDown className="size-6 animate-nudge" strokeWidth={1.75} aria-hidden />
               </a>
             </div>
           </div>
         </div>
+
+        {/* Frame edge light + depth shadow */}
+        <div
+          aria-hidden
+          className="hero-frame-edge pointer-events-none absolute animate-[fade_1s_var(--ease-organic)_0.6s_backwards] shadow-[0_40px_90px_-30px_rgb(0_0_0/0.7)] ring-1 ring-cream-50/15 ring-inset"
+        />
       </div>
     </section>
   )
