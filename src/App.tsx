@@ -1,6 +1,7 @@
 import { Navbar } from './components/Navbar'
 import { Hero } from './sections/Hero'
 import { PetaKebun } from './sections/PetaKebun'
+import { Tentang } from './sections/Tentang'
 
 function App() {
   return (
@@ -8,6 +9,7 @@ function App() {
       <Navbar />
       <main>
         <Hero />
+        <Tentang />
         <PetaKebun />
 
         {/* Placeholder — next section is built from the next reference */}

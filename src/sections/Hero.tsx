@@ -72,8 +72,10 @@ export function Hero() {
     const update = () => {
       raf = 0
       const rect = section.getBoundingClientRect()
-      const total = rect.height - window.innerHeight
-      const p = total > 0 ? Math.min(1, Math.max(0, -rect.top / total)) : 0
+      // The zoom completes over the first viewport of scroll; the rest of the track is where
+      // the next section slides up over the pinned stage (see Tentang's negative margin).
+      const total = window.innerHeight
+      const p = Math.min(1, Math.max(0, -rect.top / total))
       stage.style.setProperty('--p', p.toFixed(4))
       stage.toggleAttribute('data-past', p > 0.32)
     }
@@ -121,7 +123,7 @@ export function Hero() {
   const inner = { left: 'calc(var(--hero-fx) + var(--hero-px))', right: 'calc(var(--hero-fx) + var(--hero-px))' }
 
   return (
-    <section ref={sectionRef} aria-label="Selamat datang" className="relative h-[200svh] motion-reduce:h-svh">
+    <section ref={sectionRef} aria-label="Selamat datang" className="relative h-[250svh] motion-reduce:h-svh">
       <div ref={stageRef} className="hero-stage sticky top-0 isolate h-svh min-h-[600px] overflow-hidden bg-forest-950">
         {/* Blurred surround (outside the frame) */}
         <div aria-hidden className="hero-media hero-media--fade blur-2xl brightness-[0.55] saturate-[1.1]">
@@ -200,7 +202,7 @@ export function Hero() {
                 </a>
               </div>
               <a
-                href="#peta"
+                href="#tentang"
                 aria-label="Gulir ke bagian berikutnya"
                 className="hidden h-[88px] w-14 shrink-0 animate-rise place-items-center rounded-full border border-cream-50/15 bg-forest-950/40 text-cream-50 backdrop-blur-xl transition-colors hover:bg-forest-950/60 sm:grid"
                 style={{ animationDelay: '1.3s' }}
