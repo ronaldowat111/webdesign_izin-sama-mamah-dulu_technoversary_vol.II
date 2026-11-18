@@ -1,13 +1,169 @@
 @import 'tailwindcss';
 
-/* Design tokens — use as bg-brand, text-brand-dark, etc. */
+/* ==========================================================================
+   Kebun Raya Bogor — Design Tokens
+   Usage: bg-forest-900, text-cream-50, text-gold-400, rounded-card, shadow-soft, font-display …
+   Contrast notes (WCAG AA, checked):
+     forest-900 on cream-50 13.4:1 · sage-600 on cream-50 4.9:1 (min for small text)
+     gold-400 on forest-900 6.8:1 · white on terra-600 5.8:1 (terra-500 FAILS with white → decoration only)
+     gold text on light backgrounds → use gold-700
+   ========================================================================== */
 @theme {
-  --color-brand: oklch(0.55 0.13 150);
-  --color-brand-dark: oklch(0.38 0.1 150);
-  --color-brand-light: oklch(0.94 0.04 150);
-  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  /* Deep forest — primary, dark surfaces, headings */
+  --color-forest-950: #0f2419;
+  --color-forest-900: #16301f;
+  --color-forest-800: #1e3f2a;
+  --color-forest-700: #2c5a3f;
+  --color-forest-600: #3d7253;
+
+  /* Sage — secondary, muted surfaces, supporting text */
+  --color-sage-600: #5e7257;
+  --color-sage-500: #7d8f72;
+  --color-sage-400: #9dae8e;
+  --color-sage-200: #cbd5bf;
+  --color-sage-100: #e3e9da;
+
+  /* Warm cream — page background, light surfaces */
+  --color-cream-50: #fbf8f1;
+  --color-cream-100: #f4eddf;
+  --color-cream-200: #e9dec8;
+
+  /* Gold — premium accent, highlights on dark */
+  --color-gold-300: #e3c88c;
+  --color-gold-400: #d4af62;
+  --color-gold-600: #9c7424;
+  --color-gold-700: #7a5a1c;
+
+  /* Terracotta — CTA / urgency accent */
+  --color-terra-400: #d98563;
+  --color-terra-500: #c2643f;
+  --color-terra-600: #a14e2c;
+  --color-terra-700: #833e22;
+
+  /* Text */
+  --color-ink: #1c2620;
+
+  /* Typography */
+  --font-display: 'Fraunces', ui-serif, Georgia, serif;
+  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+
+  /* Radius */
+  --radius-chip: 0.5rem; /* 8px  — chips, inputs, tags */
+  --radius-card: 1rem; /* 16px — cards */
+  --radius-panel: 1.75rem; /* 28px — feature panels, hero media */
+
+  /* Shadows — tinted with forest, never pure black */
+  --shadow-soft: 0 1px 2px rgb(22 48 31 / 0.06), 0 8px 24px -8px rgb(22 48 31 / 0.18);
+  --shadow-lift: 0 2px 4px rgb(22 48 31 / 0.06), 0 24px 48px -16px rgb(22 48 31 / 0.28);
+  --shadow-glow: 0 0 0 1px rgb(212 175 98 / 0.35), 0 12px 32px -8px rgb(212 175 98 / 0.35);
+
+  /* Motion */
+  --ease-organic: cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-rise: rise 0.9s var(--ease-organic) both;
+  --animate-fade: fade 0.8s var(--ease-organic) both;
+  --animate-frame-in: frame-in 1.3s var(--ease-organic) both;
+  --animate-nudge: nudge 2.2s ease-in-out infinite;
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(28px);
+    }
+  }
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+  }
+  /* Hero "window" closes in from full-bleed to the framed panel */
+  @keyframes frame-in {
+    from {
+      clip-path: inset(0 0 round 0);
+    }
+  }
+  @keyframes nudge {
+    0%,
+    100% {
+      transform: translateY(-3px);
+    }
+    50% {
+      transform: translateY(4px);
+    }
+  }
 }
 
-body {
-  @apply bg-white text-slate-900 antialiased;
+/* Hero frame geometry — shared by the framed video, the frame content and the fixed navbar */
+:root {
+  --hero-fx: 10px; /* frame inset, horizontal */
+  --hero-fy: 10px; /* frame inset, vertical */
+  --hero-px: 16px; /* content padding inside the frame */
+}
+@media (min-width: 640px) {
+  :root {
+    --hero-fx: 20px;
+    --hero-fy: 20px;
+    --hero-px: 32px;
+  }
+}
+@media (min-width: 1024px) {
+  :root {
+    --hero-fx: clamp(24px, 5vw, 80px);
+    --hero-fy: clamp(24px, 9vh, 104px);
+    --hero-px: clamp(32px, 7vw, 112px);
+  }
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-cream-50 font-sans text-ink antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-display text-forest-900;
+    font-optical-sizing: auto;
+    text-wrap: balance;
+  }
+  ::selection {
+    @apply bg-gold-300 text-forest-950;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-gold-400;
+  }
+}
+
+/* Glassmorphism — only over imagery/dark surfaces; solid fallback when blur unsupported */
+@utility glass {
+  background: rgb(15 36 25 / 0.55);
+  border: 1px solid rgb(251 248 241 / 0.16);
+  @supports (backdrop-filter: blur(1px)) {
+    background: rgb(251 248 241 / 0.1);
+    backdrop-filter: blur(18px) saturate(140%);
+  }
+}
+
+@utility glass-light {
+  background: rgb(251 248 241 / 0.92);
+  border: 1px solid rgb(255 255 255 / 0.6);
+  @supports (backdrop-filter: blur(1px)) {
+    background: rgb(251 248 241 / 0.7);
+    backdrop-filter: blur(18px) saturate(140%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
